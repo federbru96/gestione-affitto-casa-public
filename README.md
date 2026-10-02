@@ -13,6 +13,12 @@ Applicazione web leggera, moderna e incentrata sulla privacy, sviluppata in **Re
 * **Generazione Ricevute PDF:** Creazione istantanea di ricevute di pagamento formali direttamente dal browser grazie a `jsPDF`.
 * **Architettura "Security via Frontend Logic":** Progettato per mantenere i dati isolati e sicuri, separando la logica pubblica del codice dalle credenziali di produzione.
 
+Vista Inquilino
+<img width="1035" height="883" alt="Screenshot 2026-10-02 115525" src="https://github.com/user-attachments/assets/428d5e1c-1a90-4ae6-b28a-a7963288aa30" />
+
+Vista Proprietario
+<img width="1056" height="886" alt="Screenshot 2026-10-02 115546" src="https://github.com/user-attachments/assets/1a4bea00-cfc5-466b-a1f2-188852de523c" />
+
 ---
 
 ## 🛠️ Stack Tecnologico
@@ -29,5 +35,4 @@ Se desideri clonare questo repository e configurare una tua istanza privata dell
 
 ### 1. Clona il repository
 ```bash
-git clone [https://github.com/federbru96/gestione-affitto-casa-public.git](https://github.com/federbru96/gestione-affitto-casa-public.git)
-cd gestione-affitto-casa-public
+git clone https://github.com/federbru96/gestione-affitto-casa-public.git
