@@ -5,12 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "scripts": {
-      "dev": "vite",
-      "build": "vite build",
-      "lint": "oxlint",
-      "preview": "vite preview"
-    }
+    "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
