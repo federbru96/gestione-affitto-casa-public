@@ -1,32 +1,33 @@
-# React + TypeScript + Vite
+# 🏠 Gestione Affitto & Spese (Open Source)
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Applicazione web leggera, moderna e incentrata sulla privacy, sviluppata in **React**, **TypeScript** e **Supabase**, nata per gestire in modo trasparente e digitale i contratti di locazione transitori e la suddivisione delle bollette/utenze tra proprietario e inquilino.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ✨ Caratteristiche Principali
 
-## React Compiler
+* **Doppia Vista (Proprietario / Inquilino):**
+  * **Area Proprietario:** Accessibile tramite PIN protetto, permette di monitorare le scadenze, aggiornare gli stati dei pagamenti con un click, caricare nuove bollette in PDF e generare ricevute di pagamento conformi.
+  * **Area Inquilino:** Permette alla parte conduttrice di consultare lo storico dei mesi, verificare lo stato dei pagamenti, scaricare le ricevute PDF ufficiali e visualizzare i documenti dell'immobile (es. APE, Visura Catastale).
+* **Gestione Automatica delle Utenze:** Inserimento rapido delle bollette (Luce, Gas, Acqua, Internet, ecc.) con ricalcolo automatico del totale mensile e allegato PDF collegato tramite Supabase Storage.
+* **Generazione Ricevute PDF:** Creazione istantanea di ricevute di pagamento formali direttamente dal browser grazie a `jsPDF`.
+* **Architettura "Security via Frontend Logic":** Progettato per mantenere i dati isolati e sicuri, separando la logica pubblica del codice dalle credenziali di produzione.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## 🛠️ Stack Tecnologico
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+* **Frontend:** React 19, TypeScript, Vite, Lucide React, jsPDF.
+* **Backend & Database:** Supabase (PostgreSQL + Storage buckets per i PDF).
+* **Hosting:** Vercel / GitHub Pages.
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+---
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## 🚀 Guida all'Installazione (Per uso personale o sviluppo)
+
+Se desideri clonare questo repository e configurare una tua istanza privata dell'applicazione con Supabase, segui questi passaggi:
+
+### 1. Clona il repository
+```bash
+git clone [https://github.com/federbru96/gestione-affitto-casa-public.git](https://github.com/federbru96/gestione-affitto-casa-public.git)
+cd gestione-affitto-casa-public
