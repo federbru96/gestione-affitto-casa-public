@@ -1,38 +1,46 @@
-# 🏠 Gestione Affitto & Spese (Open Source)
+# 🏠 RentFlow - Gestione Affitto & Spese (Micro-SaaS Ready)
 
-Applicazione web leggera, moderna e incentrata sulla privacy, sviluppata in **React**, **TypeScript** e **Supabase**, nata per gestire in modo trasparente e digitale i contratti di locazione transitori e la suddivisione delle bollette/utenze tra proprietario e inquilino.
+Applicazione web moderna, leggera e focalizzata sulla gestione digitale e trasparente dei contratti di locazione transitori, il tracciamento dei pagamenti e la suddivisione delle spese/utenze tra proprietario e inquilino.
+
+Nata per gestire un'esigenza reale di gestione immobiliare, l'architettura è stata strutturata in modo pulito e modulare, pronta per essere evoluta in un servizio **Micro-SaaS multi-proprietario**.
 
 ---
 
 ## ✨ Caratteristiche Principali
 
-* **Doppia Vista (Proprietario / Inquilino):**
-  * **Area Proprietario:** Accessibile tramite PIN protetto, permette di monitorare le scadenze, aggiornare gli stati dei pagamenti con un click, caricare nuove bollette in PDF e generare ricevute di pagamento conformi.
-  * **Area Inquilino:** Permette alla parte conduttrice di consultare lo storico dei mesi, verificare lo stato dei pagamenti, scaricare le ricevute PDF ufficiali e visualizzare i documenti dell'immobile (es. APE, Visura Catastale).
-* **Gestione Automatica delle Utenze:** Inserimento rapido delle bollette (Luce, Gas, Acqua, Internet, ecc.) con ricalcolo automatico del totale mensile e allegato PDF collegato tramite Supabase Storage.
-* **Generazione Ricevute PDF:** Creazione istantanea di ricevute di pagamento formali direttamente dal browser grazie a `jsPDF`.
-* **Architettura "Security via Frontend Logic":** Progettato per mantenere i dati isolati e sicuri, separando la logica pubblica del codice dalle credenziali di produzione.
+* **Doppia Vista (Proprietario Admin / Inquilino):**
+  * **Area Proprietario:** Protetta da autenticazione reale (**Supabase Auth** via Email e Password). Permette di monitorare scadenze, aggiornare lo stato dei pagamenti con un click, caricare le bollette in PDF e generare le ricevute.
+    * **Area Inquilino:** Accesso diretto per consultare lo storico mensile, verificare lo stato dei saldi, scaricare le ricevute PDF ufficiali e accedere ai documenti dell'immobile (es. APE, Visura Catastale).
+    * **Gestione Automatica delle Utenze:** Inserimento rapido delle spese (Luce, Gas, Acqua, Internet) con ricalcolo automatico del totale e archiviazione del PDF su **Supabase Storage**.
+    * **Generazione Ricevute PDF:** Modulo dedicato (`src/utils/pdfGenerator.ts`) per la creazione istantanea e il download di ricevute di pagamento conformi tramite `jsPDF`.
+    * **Pronto per l'evoluzione SaaS:** Architettura pronta per l'isolamento dei dati per singolo proprietario (Multi-tenancy via Supabase RLS).
 
-Vista Inquilino
-<img width="1035" height="883" alt="Screenshot 2026-10-02 115525" src="https://github.com/user-attachments/assets/428d5e1c-1a90-4ae6-b28a-a7963288aa30" />
+    ---
 
-Vista Proprietario
-<img width="1056" height="886" alt="Screenshot 2026-10-02 115546" src="https://github.com/user-attachments/assets/1a4bea00-cfc5-466b-a1f2-188852de523c" />
+    ## 📸 Anteprima Interfaccia
 
----
+    **Vista Inquilino**
+    <img width="1035" height="883" alt="Vista Inquilino" src="https://github.com/user-attachments/assets/428d5e1c-1a90-4ae6-b28a-a7963288aa30" />
 
-## 🛠️ Stack Tecnologico
+    **Vista Proprietario (Admin)**
+    <img width="1056" height="886" alt="Vista Proprietario" src="https://github.com/user-attachments/assets/1a4bea00-cfc5-466b-a1f2-188852de523c" />
 
-* **Frontend:** React 19, TypeScript, Vite, Lucide React, jsPDF.
-* **Backend & Database:** Supabase (PostgreSQL + Storage buckets per i PDF).
-* **Hosting:** Vercel / GitHub Pages.
+    ---
 
----
+    ## 🛠️ Stack Tecnologico
 
-## 🚀 Guida all'Installazione (Per uso personale o sviluppo)
+    * **Frontend:** React 19, TypeScript, Vite, Lucide React, jsPDF.
+    * **Backend & Database:** Supabase (PostgreSQL, Supabase Auth, Storage Buckets).
+    * **Hosting:** Vercel / Netlify / StackBlitz.
 
-Se desideri clonare questo repository e configurare una tua istanza privata dell'applicazione con Supabase, segui questi passaggi:
+    ---
 
-### 1. Clona il repository
-```bash
-git clone https://github.com/federbru96/gestione-affitto-casa-public.git
+    ## 🚀 Guida all'Installazione e Configurazione
+
+    Segui questi passaggi per clonare e avviare il progetto in locale:
+
+    ### 1. Clona il repository e installa le dipendenze
+    ```bash
+    git clone [https://github.com/federbru96/gestione-affitto-casa-public.git](https://github.com/federbru96/gestione-affitto-casa-public.git)
+    cd gestione-affitto-casa-public
+    npm install
