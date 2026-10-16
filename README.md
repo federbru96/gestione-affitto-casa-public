@@ -1,46 +1,68 @@
-# 🏠 RentFlow - Gestione Affitto & Spese (Micro-SaaS Ready)
+# 🏠 RentFlow - Gestione Affitto & Spese
 
-Applicazione web moderna, leggera e focalizzata sulla gestione digitale e trasparente dei contratti di locazione transitori, il tracciamento dei pagamenti e la suddivisione delle spese/utenze tra proprietario e inquilino.
+Applicazione web leggera per gestire un contratto di locazione transitorio: storico dei pagamenti, ripartizione delle utenze, ricevute PDF e documenti dell'immobile.
 
-Nata per gestire un'esigenza reale di gestione immobiliare, l'architettura è stata strutturata in modo pulito e modulare, pronta per essere evoluta in un servizio **Micro-SaaS multi-proprietario**.
+Questa è la **versione generica e pubblica**: contiene solo dati di esempio (inquilino fittizio "Mario Rossi"). Esiste una versione privata, con la stessa interfaccia e le stesse funzioni, usata per un immobile reale.
 
 ---
 
-## ✨ Caratteristiche Principali
+## ✨ Funzioni
 
-* **Doppia Vista (Proprietario Admin / Inquilino):**
-  * **Area Proprietario:** Protetta da autenticazione reale (**Supabase Auth** via Email e Password). Permette di monitorare scadenze, aggiornare lo stato dei pagamenti con un click, caricare le bollette in PDF e generare le ricevute.
-    * **Area Inquilino:** Accesso diretto per consultare lo storico mensile, verificare lo stato dei saldi, scaricare le ricevute PDF ufficiali e accedere ai documenti dell'immobile (es. APE, Visura Catastale).
-    * **Gestione Automatica delle Utenze:** Inserimento rapido delle spese (Luce, Gas, Acqua, Internet) con ricalcolo automatico del totale e archiviazione del PDF su **Supabase Storage**.
-    * **Generazione Ricevute PDF:** Modulo dedicato (`src/utils/pdfGenerator.ts`) per la creazione istantanea e il download di ricevute di pagamento conformi tramite `jsPDF`.
-    * **Pronto per l'evoluzione SaaS:** Architettura pronta per l'isolamento dei dati per singolo proprietario (Multi-tenancy via Supabase RLS).
+* **Area Proprietario** protetta da **Supabase Auth** (email e password): aggiorna lo stato dei pagamenti con un click, carica le bollette in PDF, ripartisce le utenze e genera le ricevute.
+* **Area Inquilino** in sola lettura: storico mensile, stato dei saldi, bollette scaricabili per ogni mese, ricevuta PDF per i mesi pagati e **documenti dell'immobile** (es. APE, visura).
+* **Utenze**: inserimento di Luce, Gas, Acqua, Internet, ecc. con ricalcolo automatico del totale mensile; il PDF va su Supabase Storage.
+* **Ricevute PDF** generate nel browser con `jsPDF`.
 
-    ---
+## 🛠️ Stack
 
-    ## 📸 Anteprima Interfaccia
+React 18, TypeScript, Vite, Lucide React, jsPDF, Supabase (PostgreSQL, Auth, Storage). Hosting consigliato: Vercel.
 
-    **Vista Inquilino**
-    <img width="1035" height="883" alt="Vista Inquilino" src="https://github.com/user-attachments/assets/428d5e1c-1a90-4ae6-b28a-a7963288aa30" />
+---
 
-    **Vista Proprietario (Admin)**
-    <img width="1056" height="886" alt="Vista Proprietario" src="https://github.com/user-attachments/assets/1a4bea00-cfc5-466b-a1f2-188852de523c" />
+## 🚀 Installazione
 
-    ---
+### 1. Clona e installa
+```bash
+git clone https://github.com/federbru96/gestione-affitto-casa-public.git
+cd gestione-affitto-casa-public
+npm install
+```
 
-    ## 🛠️ Stack Tecnologico
+### 2. Crea il progetto Supabase
+1. Crea un nuovo progetto su [supabase.com](https://supabase.com).
+2. Apri **SQL Editor** ed esegui `supabase/schema.sql`: crea le tabelle, le regole di sicurezza (RLS) e il bucket `bollette`.
+3. In **Authentication → Users** crea il tuo utente proprietario (email e password).
+4. Copia il suo UUID e lancia nel SQL Editor:
+   ```sql
+   insert into private.app_owners (user_id) values ('IL-TUO-UUID');
+   ```
+5. Inserisci il tuo inquilino nella tabella `tenants` e i mesi nella tabella `payments`.
 
-    * **Frontend:** React 19, TypeScript, Vite, Lucide React, jsPDF.
-    * **Backend & Database:** Supabase (PostgreSQL, Supabase Auth, Storage Buckets).
-    * **Hosting:** Vercel / Netlify / StackBlitz.
+### 3. Variabili d'ambiente
+Copia `.env.example` in `.env` e inserisci URL e chiave **anon** del progetto (Project Settings → API):
+```
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+```
 
-    ---
+### 4. Avvia
+```bash
+npm run dev
+```
 
-    ## 🚀 Guida all'Installazione e Configurazione
+---
 
-    Segui questi passaggi per clonare e avviare il progetto in locale:
+## 🔐 Sicurezza
 
-    ### 1. Clona il repository e installa le dipendenze
-    ```bash
-    git clone [https://github.com/federbru96/gestione-affitto-casa-public.git](https://github.com/federbru96/gestione-affitto-casa-public.git)
-    cd gestione-affitto-casa-public
-    npm install
+* La chiave `anon` è pubblica per natura: la protezione dei dati sta nelle **regole RLS** di `supabase/schema.sql`.
+* Chiunque può **leggere** i dati dell'inquilino (la vista inquilino non richiede login); **scrivere** può solo l'utente presente in `private.app_owners`. Anche chi si registra con un altro account non ottiene permessi di scrittura.
+* Il bucket `bollette` è pubblico in lettura tramite link e accetta solo PDF fino a 5 MB.
+* Non pubblicare mai la chiave `service_role` e non inserire dati reali di un inquilino se non hai attivato un login anche per lui.
+
+## 📄 Documenti dell'immobile
+
+La sezione legge la tabella `property_documents` (`title`, `file_url`). Per aggiungere un documento, carica il file dove preferisci (ad esempio in un bucket Supabase) e inserisci una riga con il link. La cartella `public/demo/` contiene tre PDF fittizi usati dai dati di esempio.
+
+## 📜 Licenza
+
+MIT, vedi `LICENSE`.

@@ -1,20 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Download, Zap, Upload, Paperclip, User, Lock, LogOut } from 'lucide-react';
+import {
+  Calendar,
+  Download,
+  Zap,
+  Upload,
+  Paperclip,
+  User,
+  Lock,
+  LogOut,
+} from 'lucide-react';
+import jsPDF from 'jspdf';
 import { supabase } from './supabaseClient';
-import { generateReceiptPDF } from './utils/pdfGenerator';
 
 export default function App() {
   const [contract, setContract] = useState<any>(null);
   const [payments, setPayments] = useState<any[]>([]);
+  const [billsMap, setBillsMap] = useState<{ [paymentId: number]: any[] }>({});
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [viewMode, setViewMode] = useState<'owner' | 'tenant'>('tenant');
-  
+
   const [session, setSession] = useState<any>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [documents, setDocuments] = useState<any[]>([]);
 
   const [billForm, setBillForm] = useState({
     type: 'Luce',
@@ -30,14 +41,27 @@ export default function App() {
       if (session) setViewMode('owner');
     });
 
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (session) setViewMode('owner');
-      else setViewMode('tenant');
-    });
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+        if (session) setViewMode('owner');
+        else setViewMode('tenant');
+      }
+    );
 
     fetchData();
+    fetchDocuments();
+
+    return () => listener.subscription.unsubscribe();
   }, []);
+
+  const fetchDocuments = async () => {
+    const { data } = await supabase
+      .from('property_documents')
+      .select('*')
+      .order('id');
+    if (data) setDocuments(data);
+  };
 
   const fetchData = async () => {
     try {
@@ -58,28 +82,29 @@ export default function App() {
         .order('id');
       if (pErr) throw pErr;
       if (paymentsData) setPayments(paymentsData);
+
+      const { data: billsData, error: bErr } = await supabase
+        .from('bills')
+        .select('*');
+      if (bErr) throw bErr;
+      
+      if (billsData) {
+        const map: { [paymentId: number]: any[] } = {};
+        billsData.forEach((bill) => {
+          if (!map[bill.payment_id]) {
+            map[bill.payment_id] = [];
+          }
+          map[bill.payment_id].push(bill);
+        });
+        setBillsMap(map);
+      }
+
     } catch (err: any) {
       console.error('Errore dettagliato:', err);
       setErrorMsg(err.message || JSON.stringify(err));
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      alert('Errore di accesso: credenziali non valide.');
-    } else {
-      setShowLoginModal(false);
-      setEmail('');
-      setPassword('');
-    }
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,19 +124,28 @@ export default function App() {
     const paymentToUpdate = payments.find((p) => p.id === monthId);
     if (!paymentToUpdate) return;
 
-    let publicUrl = paymentToUpdate.utility_file_url;
-    const fileInput = (document.getElementById('pdf-file-input') as HTMLInputElement)?.files?.[0];
+    let publicUrl = '';
+    const fileInput = (
+      document.getElementById('pdf-file-input') as HTMLInputElement
+    )?.files?.[0];
 
     if (fileInput) {
       const fileName = `bolletta_${monthId}_${Date.now()}.pdf`;
-      const { error: uploadError } = await supabase.storage.from('bollette').upload(fileName, fileInput);
+      const { error: uploadError } = await supabase.storage
+        .from('bollette')
+        .upload(fileName, fileInput);
 
       if (uploadError) {
-        alert('Errore durante il caricamento del file PDF: ' + uploadError.message);
+        alert(
+          'Errore durante il caricamento del file PDF: ' + uploadError.message
+        );
         return;
       }
 
-      const { data: publicURLData } = supabase.storage.from('bollette').getPublicUrl(fileName);
+      const { data: publicURLData } = supabase.storage
+        .from('bollette')
+        .getPublicUrl(fileName);
+
       publicUrl = publicURLData.publicUrl;
     }
 
@@ -120,7 +154,10 @@ export default function App() {
 
     const { error } = await supabase
       .from('payments')
-      .update({ utility_amount: newUtility, total: newTotal, utility_file_url: publicUrl })
+      .update({
+        utility_amount: newUtility,
+        total: newTotal,
+      })
       .eq('id', monthId);
 
     if (!error) {
@@ -133,10 +170,19 @@ export default function App() {
           file_url: publicUrl,
         },
       ]);
+
       alert('Documento caricato e collegato con successo in automatico!');
       fetchData();
-      setBillForm({ type: 'Luce', billAmount: '', tenantShare: '', selectedMonthId: '', fileName: null });
-      const fileInputEl = document.getElementById('pdf-file-input') as HTMLInputElement;
+      setBillForm({
+        type: 'Luce',
+        billAmount: '',
+        tenantShare: '',
+        selectedMonthId: '',
+        fileName: null,
+      });
+      const fileInputEl = document.getElementById(
+        'pdf-file-input'
+      ) as HTMLInputElement;
       if (fileInputEl) fileInputEl.value = '';
     } else {
       alert('Errore nel salvataggio su database: ' + error.message);
@@ -145,7 +191,8 @@ export default function App() {
 
   const togglePaymentStatus = async (id: number, currentStatus: string) => {
     const newStatus = currentStatus === 'Pagato' ? 'In attesa' : 'Pagato';
-    const payDate = newStatus === 'Pagato' ? new Date().toISOString().split('T')[0] : null;
+    const payDate =
+      newStatus === 'Pagato' ? new Date().toISOString().split('T')[0] : null;
 
     const { error } = await supabase
       .from('payments')
@@ -155,75 +202,182 @@ export default function App() {
     if (!error) fetchData();
   };
 
+  const generatePDF = (payment: any) => {
+    const doc = new jsPDF();
+
+    doc.setFontSize(18);
+    doc.text('RICEVUTA DI PAGAMENTO', 105, 20, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(`Ricevuta N°: RICEV-${payment.id}/2026`, 20, 35);
+    doc.text(
+      `Data Emissione: ${new Date().toLocaleDateString('it-IT')}`,
+      140,
+      35
+    );
+
+    doc.line(20, 40, 190, 40);
+    doc.text(`Immobile: ${contract?.address}`, 20, 50);
+    doc.text(
+      `Inquilino: ${contract?.tenant_name} (${contract?.tenant_cf})`,
+      20,
+      58
+    );
+    doc.text(`Riferimento Mese: ${payment.month}`, 20, 66);
+
+    doc.line(20, 75, 190, 75);
+    doc.text('Descrizione', 20, 83);
+    doc.text('Importo (€)', 160, 83);
+    doc.line(20, 87, 190, 87);
+
+    doc.text('Canone di locazione (Contratto Transitorio)', 20, 97);
+    doc.text(`${Number(payment.rent_amount).toFixed(2)} €`, 160, 97);
+
+    doc.text('Rimborso Spese Utenze / Documenti', 20, 107);
+    doc.text(`${Number(payment.utility_amount).toFixed(2)} €`, 160, 107);
+
+    doc.line(20, 115, 190, 115);
+    doc.setFontSize(12);
+    doc.text('TOTALE RICEVUTO:', 20, 125);
+    doc.text(`${Number(payment.total).toFixed(2)} €`, 160, 125);
+
+    doc.setFontSize(9);
+    doc.text('Pagamento effettuato a mezzo bonifico bancario.', 20, 145);
+    doc.text(
+      "Imposta di bollo da 2,00€ assolta sull'originale se dovuta.",
+      20,
+      152
+    );
+
+    doc.save(
+      `Ricevuta_${contract?.tenant_name.replace(
+        ' ',
+        '_'
+      )}_${payment.month.replace(' ', '_')}.pdf`
+    );
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    if (error) {
+      alert('Errore di accesso: credenziali non valide.');
+      setPassword('');
+    } else {
+      setShowLoginModal(false);
+      setEmail('');
+      setPassword('');
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
   if (errorMsg) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', backgroundColor: '#fff5f5', color: '#c53030', minHeight: '100vh' }}>
+      <div
+        style={{
+          padding: '40px',
+          textAlign: 'center',
+          backgroundColor: '#fff5f5',
+          color: '#c53030',
+          minHeight: '100vh',
+        }}
+      >
         <h2>Errore di connessione a Supabase:</h2>
         <p style={{ fontWeight: 'bold' }}>{errorMsg}</p>
       </div>
     );
   }
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center' }}>Caricamento dati dal database in corso... ⏳</div>;
+  if (loading) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        Caricamento dati dal database in corso... ⏳
+      </div>
+    );
+  }
 
   return (
-    <div style={{ fontFamily: 'sans-serif', backgroundColor: '#f4f6f8', minHeight: '100vh', padding: '16px', boxSizing: 'border-box' }}>
-      <div style={{ maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
-        
-        {/* HEADER */}
-        <header style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '24px', backgroundColor: 'white', padding: '16px 20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+    <div
+      style={{
+        fontFamily: 'sans-serif',
+        backgroundColor: '#f4f6f8',
+        minHeight: '100vh',
+        padding: '16px',
+      }}
+    >
+      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+        <header
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            marginBottom: '20px',
+            backgroundColor: 'white',
+            padding: '16px',
+            borderRadius: '8px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          }}
+        >
           <div>
             <h1 style={{ fontSize: '20px', margin: 0, color: '#1a202c' }}>
-              {viewMode === 'owner' ? 'Gestione Affitto Transitorio (Proprietario)' : 'Area Personale Inquilino'}
+              {viewMode === 'owner'
+                ? 'Gestione Affitto Transitorio (Proprietario)'
+                : 'Area Personale Inquilino'}
             </h1>
-            <p style={{ color: '#718096', margin: '4px 0 0 0', fontSize: '13px' }}>
+            <p
+              style={{
+                color: '#718096',
+                margin: '4px 0 0 0',
+                fontSize: '13px',
+              }}
+            >
               {contract?.address} — {contract?.tenant_name}
             </p>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {session ? (
-              <button
-                onClick={handleLogout}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#e53e3e', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}
-              >
-                <LogOut size={16}/> Esci (Logout)
-              </button>
+            {viewMode === 'owner' ? (
+              <>
+                <button
+                  onClick={() => setViewMode('tenant')}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', backgroundColor: '#319795', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', width: '100%' }}
+                >
+                  <User size={16} /> Torna a Vista Inquilino
+                </button>
+                <button
+                  onClick={handleLogout}
+                  title="Esci"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', backgroundColor: '#edf2f7', color: '#4a5568', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}
+                >
+                  <LogOut size={16} /> Esci
+                </button>
+              </>
             ) : (
               <button
-                onClick={() => setShowLoginModal(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#2d3748', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}
+                onClick={() => (session ? setViewMode('owner') : setShowLoginModal(true))}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', backgroundColor: '#2d3748', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', width: '100%' }}
               >
-                <Lock size={16}/> Accesso Proprietario
+                <Lock size={16} /> Accesso Proprietario
               </button>
             )}
           </div>
         </header>
 
-        {/* MODALE LOGIN */}
         {showLoginModal && (
           <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' }}>
             <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '320px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <Lock color="#2d3748" size={20}/>
-                <h3 style={{ margin: 0, fontSize: '18px' }}>Accesso Amministratore</h3>
+                <Lock color="#2d3748" size={20} />
+                <h3 style={{ margin: 0, fontSize: '18px' }}>Accesso Proprietario</h3>
               </div>
               <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <input
-                  type="email"
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoFocus
-                  style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '16px', width: '100%', boxSizing: 'border-box' }}
-                />
-                <input
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '16px', width: '100%', boxSizing: 'border-box' }}
-                />
+                <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '16px' }} />
+                <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '16px' }} />
                 <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                   <button type="submit" style={{ flex: 1, backgroundColor: '#3182ce', color: 'white', border: 'none', padding: '8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Accedi</button>
                   <button type="button" onClick={() => { setShowLoginModal(false); setEmail(''); setPassword(''); }} style={{ flex: 1, backgroundColor: '#edf2f7', color: '#4a5568', border: 'none', padding: '8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Annulla</button>
@@ -233,161 +387,600 @@ export default function App() {
           </div>
         )}
 
-        {/* VISTA PROPRIETARIO */}
         {viewMode === 'owner' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
-              <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <Calendar color="#3182ce" size={20}/>
-                  <h2 style={{ fontSize: '18px', margin: 0, color: '#2d3748' }}>Prossima Scadenza Canone</h2>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '20px',
+                marginBottom: '24px',
+              }}
+            >
+              <div
+                style={{
+                  backgroundColor: 'white',
+                  padding: '20px',
+                  borderRadius: '8px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '16px',
+                  }}
+                >
+                  <Calendar color="#3182ce" size={20} />
+                  <h2 style={{ fontSize: '18px', margin: 0, color: '#2d3748' }}>
+                    Prossima Scadenza Canone
+                  </h2>
                 </div>
                 <div>
-                  <p style={{ fontSize: '28px', fontWeight: 'bold', margin: 0, color: '#2d3748' }}>€ {contract?.monthly_rent}</p>
-                  <p style={{ color: '#718096', margin: '4px 0 0 0', fontSize: '14px' }}>Scadenza: il {contract?.due_day} del mese</p>
+                  <p
+                    style={{
+                      fontSize: '28px',
+                      fontWeight: 'bold',
+                      margin: 0,
+                      color: '#2d3748',
+                    }}
+                  >
+                    € {contract?.monthly_rent}
+                  </p>
+                  <p
+                    style={{
+                      color: '#718096',
+                      margin: '4px 0 0 0',
+                      fontSize: '14px',
+                    }}
+                  >
+                    Scadenza: il {contract?.due_day} del mese
+                  </p>
                 </div>
               </div>
 
-              <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                  <Zap color="#d69e2e" size={20}/>
-                  <h2 style={{ fontSize: '18px', margin: 0, color: '#2d3748' }}>Carica Nuova Bolletta</h2>
+              <div
+                style={{
+                  backgroundColor: 'white',
+                  padding: '20px',
+                  borderRadius: '8px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '16px',
+                  }}
+                >
+                  <Zap color="#d69e2e" size={20} />
+                  <h2 style={{ fontSize: '18px', margin: 0, color: '#2d3748' }}>
+                    Carica Nuova Bolletta / Documento PDF
+                  </h2>
                 </div>
-                <form onSubmit={handleApplyUtility} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+
+                <form
+                  onSubmit={handleApplyUtility}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '10px',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                    }}
+                  >
                     <div>
-                      <label style={{ fontSize: '12px', color: '#4a5568' }}>Tipo Utenza</label>
-                      <select value={billForm.type} onChange={(e) => setBillForm({ ...billForm, type: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e0', boxSizing: 'border-box' }}>
+                      <label style={{ fontSize: '12px', color: '#4a5568' }}>
+                        Tipo Utenza / Voce
+                      </label>
+                      <select
+                        value={billForm.type}
+                        onChange={(e) =>
+                          setBillForm({ ...billForm, type: e.target.value })
+                        }
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '4px',
+                          border: '1px solid #cbd5e0',
+                        }}
+                      >
                         <option value="Luce">Luce</option>
                         <option value="Gas">Gas</option>
                         <option value="Acqua">Acqua</option>
                         <option value="Internet">Internet</option>
+                        <option value="Tari">Tari</option>
+                        <option value="Assicurazione Casa">
+                          Assicurazione Casa
+                        </option>
                       </select>
                     </div>
+
                     <div>
-                      <label style={{ fontSize: '12px', color: '#4a5568' }}>Mese</label>
-                      <select value={billForm.selectedMonthId} onChange={(e) => setBillForm({ ...billForm, selectedMonthId: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e0', boxSizing: 'border-box' }}>
+                      <label style={{ fontSize: '12px', color: '#4a5568' }}>
+                        Mese di Riferimento
+                      </label>
+                      <select
+                        value={billForm.selectedMonthId}
+                        onChange={(e) =>
+                          setBillForm({
+                            ...billForm,
+                            selectedMonthId: e.target.value,
+                          })
+                        }
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '4px',
+                          border: '1px solid #cbd5e0',
+                        }}
+                      >
                         <option value="">Seleziona mese...</option>
-                        {payments.map((p) => <option key={p.id} value={p.id}>{p.month}</option>)}
+                        {payments
+                          .filter((p) => p.month !== 'Settembre 2026')
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.month}
+                            </option>
+                          ))}
                       </select>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                    }}
+                  >
                     <div>
-                      <label style={{ fontSize: '12px', color: '#4a5568' }}>Totale Documento (€)</label>
-                      <input type="number" step="0.01" value={billForm.billAmount} onChange={(e) => setBillForm({ ...billForm, billAmount: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e0', boxSizing: 'border-box' }} />
+                      <label style={{ fontSize: '12px', color: '#4a5568' }}>
+                        Totale Documento (€)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="es. 150.00"
+                        value={billForm.billAmount}
+                        onChange={(e) =>
+                          setBillForm({
+                            ...billForm,
+                            billAmount: e.target.value,
+                          })
+                        }
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '4px',
+                          border: '1px solid #cbd5e0',
+                        }}
+                      />
                     </div>
                     <div>
-                      <label style={{ fontSize: '12px', color: '#4a5568' }}>Quota Inquilino (€)</label>
-                      <input type="number" step="0.01" value={billForm.tenantShare} onChange={(e) => setBillForm({ ...billForm, tenantShare: e.target.value })} style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e0', boxSizing: 'border-box' }} />
+                      <label style={{ fontSize: '12px', color: '#4a5568' }}>
+                        Quota Inquilino (€)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="es. 75.00"
+                        value={billForm.tenantShare}
+                        onChange={(e) =>
+                          setBillForm({
+                            ...billForm,
+                            tenantShare: e.target.value,
+                          })
+                        }
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '4px',
+                          border: '1px solid #cbd5e0',
+                        }}
+                      />
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: '#edf2f7', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px', border: '1px dashed #cbd5e0' }}>
-                      <Upload size={14}/> Allega PDF
-                      <input id="pdf-file-input" type="file" accept=".pdf" onChange={handleFileUpload} style={{ display: 'none' }} />
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      marginTop: '4px',
+                    }}
+                  >
+                    <label
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        backgroundColor: '#edf2f7',
+                        padding: '8px 12px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        border: '1px dashed #cbd5e0',
+                      }}
+                    >
+                      <Upload size={14} /> Allega PDF
+                      <input
+                        id="pdf-file-input"
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleFileUpload}
+                        style={{ display: 'none' }}
+                      />
                     </label>
-                    <span style={{ fontSize: '12px', color: '#718096', wordBreak: 'break-all' }}>{billForm.fileName || 'Nessun file'}</span>
+                    <span
+                      style={{
+                        fontSize: '12px',
+                        color: '#718096',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        maxWidth: '180px',
+                      }}
+                    >
+                      {billForm.fileName || 'Nessun file'}
+                    </span>
                   </div>
-                  <button type="submit" style={{ backgroundColor: '#3182ce', color: 'white', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Salva</button>
+
+                  <button
+                    type="submit"
+                    style={{
+                      backgroundColor: '#3182ce',
+                      color: 'white',
+                      border: 'none',
+                      padding: '10px',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      marginTop: '8px',
+                    }}
+                  >
+                    Salva nel Database
+                  </button>
                 </form>
               </div>
             </div>
 
-            <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-              <h2 style={{ fontSize: '18px', margin: '0 0 16px 0', color: '#2d3748' }}>Registro Pagamenti (Gestione)</h2>
-              <div style={{ width: '100%', overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '600px' }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid #edf2f7', color: '#718096', fontSize: '14px' }}>
-                      <th style={{ padding: '12px 8px' }}>Mese</th>
-                      <th style={{ padding: '12px 8px' }}>Canone</th>
-                      <th style={{ padding: '12px 8px' }}>Utenze</th>
-                      <th style={{ padding: '12px 8px' }}>Totale</th>
-                      <th style={{ padding: '12px 8px' }}>Stato</th>
-                      <th style={{ padding: '12px 8px', textAlign: 'right' }}>Azione</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {payments.map((p) => (
-                      <tr key={p.id} style={{ borderBottom: '1px solid #edf2f7', fontSize: '14px' }}>
-                        <td style={{ padding: '12px 8px', fontWeight: '500' }}>{p.month}</td>
-                        <td style={{ padding: '12px 8px' }}>€ {p.rent_amount}</td>
-                        <td style={{ padding: '12px 8px' }}>€ {p.utility_amount}</td>
-                        <td style={{ padding: '12px 8px', fontWeight: 'bold' }}>€ {p.total}</td>
-                        <td style={{ padding: '12px 8px' }}>
-                          <span onClick={() => togglePaymentStatus(p.id, p.status)} style={{ cursor: 'pointer', padding: '4px 8px', borderRadius: '12px', fontSize: '12px', backgroundColor: p.status === 'Pagato' ? '#c6f6d5' : '#feebc8', color: p.status === 'Pagato' ? '#22543d' : '#744210', display: 'inline-block' }}>
-                            {p.status}
+            <div
+              style={{
+                backgroundColor: 'white',
+                padding: '16px',
+                borderRadius: '8px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                overflowX: 'auto',
+              }}
+            >
+              <h2 style={{ fontSize: '16px', margin: '0 0 16px 0', color: '#2d3748' }}>
+                Registro Pagamenti & Bollette (Gestione)
+              </h2>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {payments.map((p) => {
+                  const monthBills = billsMap[p.id] || [];
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        padding: '14px',
+                        backgroundColor: '#f8fafc',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '10px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '15px', fontWeight: 'bold', color: '#1a202c' }}>
+                          {p.month}
+                        </span>
+                        <span
+                          onClick={() => togglePaymentStatus(p.id, p.status)}
+                          style={{
+                            cursor: 'pointer',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            backgroundColor: p.status === 'Pagato' ? '#c6f6d5' : '#feebc8',
+                            color: p.status === 'Pagato' ? '#22543d' : '#744210',
+                          }}
+                        >
+                          {p.status} (Cambia)
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', fontSize: '12px', borderTop: '1px solid #edf2f7', borderBottom: '1px solid #edf2f7', padding: '6px 0' }}>
+                        <div>
+                          <span style={{ color: '#718096', display: 'block', fontSize: '10px' }}>Canone</span>
+                          <strong>€ {p.rent_amount}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#718096', display: 'block', fontSize: '10px' }}>Utenze</span>
+                          <strong>€ {p.utility_amount}</strong>
+                        </div>
+                        <div>
+                          <span style={{ color: '#718096', display: 'block', fontSize: '10px' }}>Totale</span>
+                          <strong style={{ color: '#3182ce' }}>€ {p.total}</strong>
+                        </div>
+                      </div>
+
+                      <div>
+                        <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#4a5568', display: 'block', marginBottom: '4px' }}>
+                          Allegati Singoli:
+                        </span>
+                        {monthBills.length > 0 ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {monthBills.map((b) => (
+                              <a
+                                key={b.id}
+                                href={b.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  fontSize: '11px',
+                                  color: '#2b6cb0',
+                                  textDecoration: 'none',
+                                  backgroundColor: '#ebf8ff',
+                                  border: '1px solid #bee3f8',
+                                  padding: '3px 6px',
+                                  borderRadius: '4px',
+                                }}
+                              >
+                                <Paperclip size={10} /> {b.utility_type} (€ {b.tenant_share})
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ color: '#a0aec0', fontSize: '11px' }}>—</span>
+                        )}
+                      </div>
+
+                      <div>
+                        {p.status === 'Pagato' ? (
+                          <button
+                            onClick={() => generatePDF(p)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: '4px',
+                              backgroundColor: '#edf2f7',
+                              color: '#2d3748',
+                              border: 'none',
+                              padding: '6px 10px',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              width: '100%',
+                            }}
+                          >
+                            <Download size={14} /> Scarica PDF Ricevuta
+                          </button>
+                        ) : (
+                          <span style={{ color: '#a0aec0', fontSize: '11px', fontStyle: 'italic', display: 'block', textAlign: 'center' }}>
+                            In attesa di saldo per la ricevuta
                           </span>
-                        </td>
-                        <td style={{ padding: '12px 8px', textAlign: 'right' }}>
-                          {p.status === 'Pagato' && (
-                            <button onClick={() => generateReceiptPDF(p, contract)} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#edf2f7', color: '#2d3748', border: 'none', padding: '6px 10px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
-                              <Download size={14}/> PDF Ricevuta
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </>
         )}
 
-        {/* VISTA INQUILINO */}
         {viewMode === 'tenant' && (
-          <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', borderBottom: '1px solid #edf2f7', paddingBottom: '12px' }}>
-              <User color="#319795" size={24}/>
+          <div
+            style={{
+              backgroundColor: 'white',
+              padding: '16px',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '20px',
+                borderBottom: '1px solid #edf2f7',
+                paddingBottom: '12px',
+              }}
+            >
+              <User color="#319795" size={24} />
               <div>
-                <h2 style={{ fontSize: '18px', margin: 0, color: '#2d3748' }}>Benvenuta, {contract?.tenant_name}</h2>
-                <p style={{ color: '#718096', margin: '2px 0 0 0', fontSize: '13px' }}>Ecco il riepilogo dei tuoi pagamenti.</p>
+                <h2 style={{ fontSize: '18px', margin: 0, color: '#2d3748' }}>
+                  Benvenuto/a, {contract?.tenant_name}
+                </h2>
+                <p
+                  style={{
+                    color: '#718096',
+                    margin: '2px 0 0 0',
+                    fontSize: '13px',
+                  }}
+                >
+                  Ecco il riepilogo dei tuoi pagamenti e delle bollette divise.
+                </p>
               </div>
             </div>
 
-            <div style={{ width: '100%', overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '550px' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #edf2f7', color: '#718096', fontSize: '14px' }}>
-                    <th style={{ padding: '12px 8px' }}>Mese</th>
-                    <th style={{ padding: '12px 8px' }}>Canone</th>
-                    <th style={{ padding: '12px 8px' }}>Utenze</th>
-                    <th style={{ padding: '12px 8px' }}>Totale</th>
-                    <th style={{ padding: '12px 8px' }}>Stato</th>
-                    <th style={{ padding: '12px 8px', textAlign: 'right' }}>Scarica</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.map((p) => (
-                    <tr key={p.id} style={{ borderBottom: '1px solid #edf2f7', fontSize: '14px' }}>
-                      <td style={{ padding: '12px 8px', fontWeight: '500' }}>{p.month}</td>
-                      <td style={{ padding: '12px 8px' }}>€ {p.rent_amount}</td>
-                      <td style={{ padding: '12px 8px' }}>{p.utility_amount > 0 ? `€ ${p.utility_amount}` : '—'}</td>
-                      <td style={{ padding: '12px 8px', fontWeight: 'bold' }}>€ {p.total}</td>
-                      <td style={{ padding: '12px 8px' }}>
-                        <span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', backgroundColor: p.status === 'Pagato' ? '#c6f6d5' : '#feebc8', color: p.status === 'Pagato' ? '#22543d' : '#744210', display: 'inline-block' }}>
-                          {p.status}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {payments.map((p) => {
+                const monthBills = billsMap[p.id] || [];
+                return (
+                  <div
+                    key={p.id}
+                    style={{
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      padding: '16px',
+                      backgroundColor: '#f8fafc',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#1a202c' }}>
+                        {p.month}
+                      </span>
+                      <span
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                          backgroundColor: p.status === 'Pagato' ? '#c6f6d5' : '#feebc8',
+                          color: p.status === 'Pagato' ? '#22543d' : '#744210',
+                        }}
+                      >
+                        {p.status}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', fontSize: '13px', borderTop: '1px solid #edf2f7', borderBottom: '1px solid #edf2f7', padding: '8px 0' }}>
+                      <div>
+                        <span style={{ color: '#718096', display: 'block', fontSize: '11px' }}>Canone</span>
+                        <strong style={{ color: '#2d3748' }}>€ {p.rent_amount}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#718096', display: 'block', fontSize: '11px' }}>Utenze</span>
+                        <strong style={{ color: '#2d3748' }}>{p.utility_amount > 0 ? `€ ${p.utility_amount}` : '—'}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#718096', display: 'block', fontSize: '11px' }}>Totale</span>
+                        <strong style={{ color: '#3182ce' }}>€ {p.total}</strong>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#4a5568', display: 'block', marginBottom: '6px' }}>
+                        Bollette Separate:
+                      </span>
+                      {monthBills.length > 0 ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {monthBills.map((b) => (
+                            <a
+                              key={b.id}
+                              href={b.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                color: '#2b6cb0',
+                                textDecoration: 'none',
+                                fontSize: '12px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontWeight: '500',
+                                backgroundColor: '#ebf8ff',
+                                border: '1px solid #bee3f8',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                              }}
+                            >
+                              <Paperclip size={12} /> Scarica {b.utility_type} (€ {b.tenant_share})
+                            </a>
+                          ))}
+                        </div>
+                      ) : (
+                        <span style={{ color: '#a0aec0', fontSize: '12px' }}>Nessuna bolletta allegata</span>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '4px' }}>
+                      {p.status === 'Pagato' ? (
+                        <button
+                          onClick={() => generatePDF(p)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            backgroundColor: '#319795',
+                            color: 'white',
+                            border: 'none',
+                            padding: '10px 14px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontWeight: '500',
+                            fontSize: '13px',
+                            width: '100%',
+                          }}
+                        >
+                          <Download size={14} /> Scarica Ricevuta PDF
+                        </button>
+                      ) : (
+                        <span
+                          style={{
+                            color: '#a0aec0',
+                            fontSize: '12px',
+                            fontStyle: 'italic',
+                            width: '100%',
+                            textAlign: 'center',
+                          }}
+                        >
+                          Ricevuta disponibile dopo il saldo
                         </span>
-                      </td>
-                      <td style={{ padding: '12px 8px', textAlign: 'right' }}>
-                        {p.status === 'Pagato' ? (
-                          <button onClick={() => generateReceiptPDF(p, contract)} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#319795', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px' }}>
-                            <Download size={14}/> Ricevuta
-                          </button>
-                        ) : (
-                          <span style={{ color: '#a0aec0', fontSize: '13px', fontStyle: 'italic' }}>Attesa saldo</span>
-                        )}
-                      </td>
-                    </tr>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div
+              style={{
+                marginTop: '30px',
+                borderTop: '1px solid #edf2f7',
+                paddingTop: '20px',
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: '16px',
+                  margin: '0 0 12px 0',
+                  color: '#2d3748',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <Paperclip size={18} /> Documenti dell'Immobile
+              </h3>
+              {documents.length === 0 ? (
+                <p style={{ margin: 0, fontSize: '13px', color: '#a0aec0', fontStyle: 'italic' }}>Nessun documento disponibile.</p>
+              ) : (
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  {documents.map((d) => (
+                    <a key={d.id} href={d.file_url} target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#edf2f7', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', color: '#2b6cb0', fontSize: '13px', fontWeight: '500', border: '1px solid #e2e8f0' }}>
+                      📄 Visualizza {d.title}
+                    </a>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )}
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
