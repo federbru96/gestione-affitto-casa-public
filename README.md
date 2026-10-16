@@ -2,7 +2,7 @@
 
 Applicazione web leggera per gestire un contratto di locazione transitorio: storico dei pagamenti, ripartizione delle utenze, ricevute PDF e documenti dell'immobile.
 
-Questa è la **versione generica e pubblica**: contiene solo dati di esempio (inquilino fittizio "Mario Rossi"). Esiste una versione privata, con la stessa interfaccia e le stesse funzioni, usata per un immobile reale.
+Questa è la **versione generica e pubblica**: contiene solo dati di esempio (inquilino fittizio "Mario Rossi").
 
 ---
 
@@ -65,4 +65,8 @@ La sezione legge la tabella `property_documents` (`title`, `file_url`). Per aggi
 
 ## 📜 Licenza
 
-MIT, vedi `LICENSE`.
+**Tutti i diritti riservati.** Il codice può essere letto e provato in locale per valutarlo (anche in vista di un acquisto). Uso in produzione, uso commerciale, copia, modifica e redistribuzione richiedono un'autorizzazione scritta dell'autore. Vedi `LICENSE`.
+
+Il progetto è in vendita su SideProjectors: con l'acquisto vengono ceduti repository, sito e progetto Supabase.
+
+Le versioni pubblicate fino al 16 ottobre 2026 (commit `847fd83` compreso) erano rilasciate con licenza MIT e restano tali per chi le ha ottenute prima di questa modifica.

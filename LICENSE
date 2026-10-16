@@ -1,21 +1,19 @@
-MIT License
+Copyright (c) 2026 federbru96. All rights reserved.
 
-Copyright (c) 2026 federbru96
+RentFlow / gestione-affitto-casa-public (the "Software")
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Evaluation. You may view the source code and run the Software locally for the sole purpose of evaluating it, including evaluating it for purchase.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+2. Restrictions. Without prior written permission from the copyright holder you may not:
+   (a) use the Software, or any part of it, in production or for any commercial purpose;
+   (b) copy, modify, merge, publish, distribute, sublicense or sell the Software or any derivative work;
+   (c) offer the Software, or a service based on it, to third parties;
+   (d) remove or alter this notice.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+3. Ownership. The Software is licensed, not sold. All rights remain with the copyright holder until transferred in writing as part of a sale agreement.
+
+4. Earlier versions. Versions of the Software published up to and including commit 847fd83 (16 October 2026) were released under the MIT License. They remain available under the MIT License to anyone who obtained them before this change. This license applies to all later versions.
+
+5. No warranty. THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+6. Contact. For licensing or purchase enquiries, use the SideProjectors listing of this project.
