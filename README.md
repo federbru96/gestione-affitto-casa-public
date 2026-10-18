@@ -19,10 +19,10 @@ Un'area riservata per gestire un affitto senza Excel e senza messaggi sparsi: pa
 
 ## Cosa fa
 
-**Area proprietario** (accesso protetto da PIN)
+**Area proprietario** (accesso con email e password, tramite Supabase Auth)
 - Controlla scadenza del canone e stato di ogni mese.
 - Segna un pagamento come pagato o in attesa con un tocco.
-- Carica le bollette in PDF (luce, gas, acqua, internet, tari, assicurazione casa) indicando totale e quota dell'inquilino.
+- Carica le bollette in PDF (luce, gas, acqua, internet, tari, assicurazione casa) indicando totale e quota dell'inquilino: il totale del mese si aggiorna da solo.
 - Genera la ricevuta di pagamento in PDF direttamente dal browser.
 
 **Area inquilino**
@@ -33,7 +33,7 @@ Un'area riservata per gestire un affitto senza Excel e senza messaggi sparsi: pa
 ## Stack
 
 - **Frontend:** React, TypeScript, Vite, Lucide React, jsPDF
-- **Backend:** Supabase (PostgreSQL e Storage per i PDF)
+- **Backend:** Supabase (PostgreSQL, Auth per il login del proprietario, Storage per i PDF)
 - **Hosting:** Vercel (va bene anche GitHub Pages)
 
 ## Installazione
@@ -48,12 +48,14 @@ cd gestione-affitto-casa-public
 npm install
 ```
 
-### 2. Crea il progetto Supabase
+### 2. Prepara Supabase
 
 1. Crea un nuovo progetto su Supabase.
-2. Crea le tabelle `tenants` (inquilino e dati dell'immobile) e `payments` (pagamenti mensili).
-3. Crea due bucket di Storage: `bollette` (PDF delle utenze) e `documenti-immobile` (APE, visura e altri documenti).
-4. Attiva la **Row Level Security** su tutte le tabelle e limita la scrittura al solo proprietario.
+2. Apri **SQL Editor → New query**, incolla il contenuto di [`schema.sql`](schema.sql) e premi **Run**. Crea le tabelle `tenants`, `payments`, `bills` e `property_documents`, le regole di sicurezza (Row Level Security) e il bucket `bollette` per i PDF.
+3. Crea l'account del proprietario in **Authentication → Users → Add user** (email e password). È con questo account che accedi all'area proprietario.
+4. In **Authentication → Sign In / Providers** disattiva la registrazione di nuovi utenti, così nessun altro può crearsi un account.
+5. Inserisci i tuoi dati: una riga in `tenants` (indirizzo, nome dell'inquilino, canone, giorno di scadenza) e una riga in `payments` per ogni mese. In fondo a `schema.sql` trovi un esempio con dati finti.
+6. Per i documenti dell'immobile (APE, visura), carica i PDF dove preferisci e aggiungi una riga in `property_documents` con `title` e `file_url`.
 
 ### 3. Configura le variabili d'ambiente
 
@@ -84,9 +86,12 @@ npm run dev
 
 ## Sicurezza e privacy
 
-- Il progetto non contiene credenziali: configurazione e chiavi stanno nel tuo `.env`, escluso dal repository.
+- Il codice non contiene credenziali: URL e chiave stanno nel tuo `.env`, escluso dal repository.
 - I dati restano nel **tuo** progetto Supabase, non su un servizio di terzi.
-- Per un uso reale, non pubblicare dati o documenti di un inquilino su un'istanza accessibile a tutti: attiva la Row Level Security e proteggi l'accesso.
+- Solo l'utente autenticato (il proprietario) può modificare pagamenti, bollette e documenti.
+- **Attenzione:** la vista inquilino non richiede login, quindi i dati dell'inquilino mostrati lì (nome, indirizzo, importi, codice fiscale nella ricevuta) sono leggibili da chiunque abbia accesso all'app. Per un uso reale tieni l'indirizzo dell'app riservato, evita di inserire dati che non vuoi rendere visibili, e valuta di aggiungere un login anche per l'inquilino.
+- I PDF delle bollette stanno in un bucket pubblico: chi ha il link può aprirli.
+- Non inserire mai la chiave `service_role` nel codice o nel repository.
 
 ## Versione online (in valutazione)
 
