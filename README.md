@@ -89,8 +89,8 @@ npm run dev
 - Il codice non contiene credenziali: URL e chiave stanno nel tuo `.env`, escluso dal repository.
 - I dati restano nel **tuo** progetto Supabase, non su un servizio di terzi.
 - Solo l'utente autenticato (il proprietario) può modificare pagamenti, bollette e documenti.
-- **Attenzione:** la vista inquilino non richiede login, quindi i dati dell'inquilino mostrati lì (nome, indirizzo, importi, codice fiscale nella ricevuta) sono leggibili da chiunque abbia accesso all'app. Per un uso reale tieni l'indirizzo dell'app riservato, evita di inserire dati che non vuoi rendere visibili, e valuta di aggiungere un login anche per l'inquilino.
-- I PDF delle bollette stanno in un bucket pubblico: chi ha il link può aprirli.
+- Anche l'inquilino accede con un login (ruolo di sola lettura): senza accesso non si vede nessun dato, nessuna bolletta e nessuna ricevuta. Crea il suo utente da Authentication → Users e inseriscilo in `private.app_tenants` (esempio in fondo a `schema.sql`).
+- I PDF delle bollette stanno in un bucket privato e si aprono con link temporanei (60 secondi) solo dopo il login.
 - Non inserire mai la chiave `service_role` nel codice o nel repository.
 
 ## Versione online (in valutazione)
