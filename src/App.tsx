@@ -22,7 +22,8 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'owner' | 'tenant'>('tenant');
 
   const [session, setSession] = useState<any>(null);
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [role, setRole] = useState<'owner' | 'tenant' | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [documents, setDocuments] = useState<any[]>([]);
@@ -36,24 +37,65 @@ export default function App() {
   });
 
   useEffect(() => {
+    const applySession = async (s: any) => {
+      setSession(s);
+      if (!s) {
+        setRole(null);
+        setContract(null);
+        setPayments([]);
+        setBillsMap({});
+        setDocuments([]);
+        setViewMode('tenant');
+        setAuthReady(true);
+        return;
+      }
+      const { data: r } = await supabase.rpc('my_role');
+      const myRole = r === 'owner' || r === 'tenant' ? r : null;
+      setRole(myRole);
+      setViewMode(myRole === 'owner' ? 'owner' : 'tenant');
+      if (myRole) await Promise.all([fetchData(), fetchDocuments()]);
+      setAuthReady(true);
+    };
+
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) setViewMode('owner');
+      applySession(session);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        if (session) setViewMode('owner');
-        else setViewMode('tenant');
+      (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          setTimeout(() => applySession(session), 0);
+        }
       }
     );
 
-    fetchData();
-    fetchDocuments();
-
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  // Apre un file del bucket privato con un link temporaneo (valido 60 secondi).
+  // I percorsi che iniziano con "/" o "http" sono file statici di esempio.
+  const openStoredFile = async (path: string) => {
+    if (!path) return;
+    if (path.startsWith('/') || path.startsWith('http')) {
+      window.open(path, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    const w = window.open('', '_blank');
+    const { data, error } = await supabase.storage
+      .from('bollette')
+      .createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      w?.close();
+      alert('Impossibile aprire il file: ' + (error?.message || 'non trovato'));
+      return;
+    }
+    if (w) {
+      w.opener = null;
+      w.location.href = data.signedUrl;
+    } else {
+      window.location.href = data.signedUrl;
+    }
+  };
 
   const fetchDocuments = async () => {
     const { data } = await supabase
@@ -124,7 +166,7 @@ export default function App() {
     const paymentToUpdate = payments.find((p) => p.id === monthId);
     if (!paymentToUpdate) return;
 
-    let publicUrl = '';
+    let storagePath = '';
     const fileInput = (
       document.getElementById('pdf-file-input') as HTMLInputElement
     )?.files?.[0];
@@ -142,11 +184,7 @@ export default function App() {
         return;
       }
 
-      const { data: publicURLData } = supabase.storage
-        .from('bollette')
-        .getPublicUrl(fileName);
-
-      publicUrl = publicURLData.publicUrl;
+      storagePath = fileName; // percorso nel bucket privato
     }
 
     const newUtility = Number(paymentToUpdate.utility_amount) + share;
@@ -167,7 +205,7 @@ export default function App() {
           utility_type: billForm.type,
           total_bill_amount: parseFloat(billForm.billAmount) || share,
           tenant_share: share,
-          file_url: publicUrl,
+          file_url: storagePath,
         },
       ]);
 
@@ -266,7 +304,6 @@ export default function App() {
       alert('Errore di accesso: credenziali non valide.');
       setPassword('');
     } else {
-      setShowLoginModal(false);
       setEmail('');
       setPassword('');
     }
@@ -275,6 +312,40 @@ export default function App() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
   };
+
+  if (!authReady) {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center' }}>
+        Caricamento... ⏳
+      </div>
+    );
+  }
+
+  if (!session || !role) {
+    return (
+      <div style={{ fontFamily: 'sans-serif', backgroundColor: '#f4f6f8', minHeight: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '16px' }}>
+        <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '340px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            <Lock color="#2d3748" size={20} />
+            <h3 style={{ margin: 0, fontSize: '18px' }}>Area riservata</h3>
+          </div>
+          <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#718096' }}>
+            {session && !role
+              ? 'Questo account non ha accesso a questa area.'
+              : 'Accedi con le credenziali ricevute dal proprietario.'}
+          </p>
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '16px' }} />
+            <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '16px' }} />
+            <button type="submit" style={{ backgroundColor: '#3182ce', color: 'white', border: 'none', padding: '8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Accedi</button>
+            {session && !role && (
+              <button type="button" onClick={handleLogout} style={{ backgroundColor: '#edf2f7', color: '#4a5568', border: 'none', padding: '8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Esci</button>
+            )}
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   if (errorMsg) {
     return (
@@ -341,14 +412,15 @@ export default function App() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {viewMode === 'owner' ? (
-              <>
+            <>
+{role === 'owner' && (
                 <button
-                  onClick={() => setViewMode('tenant')}
+                  onClick={() => setViewMode(viewMode === 'owner' ? 'tenant' : 'owner')}
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', backgroundColor: '#319795', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', width: '100%' }}
                 >
-                  <User size={16} /> Torna a Vista Inquilino
+                  <User size={16} /> {viewMode === 'owner' ? 'Torna a Vista Inquilino' : 'Torna a Gestione Proprietario'}
                 </button>
+)}
                 <button
                   onClick={handleLogout}
                   title="Esci"
@@ -356,36 +428,9 @@ export default function App() {
                 >
                   <LogOut size={16} /> Esci
                 </button>
-              </>
-            ) : (
-              <button
-                onClick={() => (session ? setViewMode('owner') : setShowLoginModal(true))}
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', backgroundColor: '#2d3748', color: 'white', border: 'none', padding: '8px 14px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px', width: '100%' }}
-              >
-                <Lock size={16} /> Accesso Proprietario
-              </button>
-            )}
+            </>
           </div>
         </header>
-
-        {showLoginModal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '16px' }}>
-            <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', width: '100%', maxWidth: '320px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-                <Lock color="#2d3748" size={20} />
-                <h3 style={{ margin: 0, fontSize: '18px' }}>Accesso Proprietario</h3>
-              </div>
-              <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '16px' }} />
-                <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e0', fontSize: '16px' }} />
-                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                  <button type="submit" style={{ flex: 1, backgroundColor: '#3182ce', color: 'white', border: 'none', padding: '8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Accedi</button>
-                  <button type="button" onClick={() => { setShowLoginModal(false); setEmail(''); setPassword(''); }} style={{ flex: 1, backgroundColor: '#edf2f7', color: '#4a5568', border: 'none', padding: '8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer' }}>Annulla</button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
 
         {viewMode === 'owner' && (
           <>
@@ -727,9 +772,11 @@ export default function App() {
                             {monthBills.map((b) => (
                               <a
                                 key={b.id}
-                                href={b.file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  openStoredFile(b.file_url);
+                                }}
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
@@ -881,9 +928,11 @@ export default function App() {
                           {monthBills.map((b) => (
                             <a
                               key={b.id}
-                              href={b.file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                openStoredFile(b.file_url);
+                              }}
                               style={{
                                 color: '#2b6cb0',
                                 textDecoration: 'none',
@@ -972,7 +1021,7 @@ export default function App() {
               ) : (
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   {documents.map((d) => (
-                    <a key={d.id} href={d.file_url} target="_blank" rel="noopener noreferrer" style={{ backgroundColor: '#edf2f7', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', color: '#2b6cb0', fontSize: '13px', fontWeight: '500', border: '1px solid #e2e8f0' }}>
+                    <a key={d.id} href="#" onClick={(e) => { e.preventDefault(); openStoredFile(d.file_url); }} style={{ backgroundColor: '#edf2f7', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', color: '#2b6cb0', fontSize: '13px', fontWeight: '500', border: '1px solid #e2e8f0' }}>
                       📄 Visualizza {d.title}
                     </a>
                   ))}
