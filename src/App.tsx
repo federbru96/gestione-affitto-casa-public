@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { supabase } from './supabaseClient';
+import { Analytics } from '@vercel/analytics/react';
 
 export default function App() {
   const [contract, setContract] = useState<any>(null);
@@ -373,14 +374,15 @@ export default function App() {
   }
 
   return (
-    <div
-      style={{
-        fontFamily: 'sans-serif',
-        backgroundColor: '#f4f6f8',
-        minHeight: '100vh',
-        padding: '16px',
-      }}
-    >
+    <>
+      <div
+        style={{
+          fontFamily: 'sans-serif',
+          backgroundColor: '#f4f6f8',
+          minHeight: '100vh',
+          padding: '16px',
+        }}
+      >
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
         <header
           style={{
@@ -1032,5 +1034,7 @@ export default function App() {
         )}
       </div>
     </div>
+      <Analytics />
+    </>
   );
 }
