@@ -1,0 +1,27 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Esegue il ping ogni 3 giorni a mezzanotte UTC
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # Consente di avviare il job manualmente da GitHub
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase API
+        run: |
+          status_code=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          
+          echo "Supabase Response Status: $status_code"
+          
+          if [ "$status_code" -eq 200 ] || [ "$status_code" -eq 204 ]; then
+            echo "Database contattato con successo!"
+            exit 0
+          else
+            echo "Errore durante la chiamata API (Status code: $status_code)"
+            exit 1
+          fi
