@@ -2,9 +2,8 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    # Esegue il ping ogni 3 giorni a mezzanotte UTC
     - cron: '0 0 */3 * *'
-  workflow_dispatch: # Consente di avviare il job manualmente da GitHub
+  workflow_dispatch:
 
 jobs:
   ping:
@@ -12,13 +11,21 @@ jobs:
     steps:
       - name: Ping Supabase API
         run: |
-          status_code=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/" \
+          # Rimuove l'eventuale slash finale dall'URL
+          CLEAN_URL=$(echo "${{ secrets.SUPABASE_URL }}" | sed 's/*$//')
+          
+          # Esegue la chiamata salvando risposta e status code
+          response=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X GET "${CLEAN_URL}/rest/v1/" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
           
-          echo "Supabase Response Status: $status_code"
+          status_code=$(echo "$response" | grep "HTTP_STATUS:" | cut -d':' -f2)
+          body=$(echo "$response" | sed '/HTTP_STATUS:/d')
           
-          if [ "$status_code" -eq 200 ] || [ "$status_code" -eq 204 ]; then
+          echo "Supabase Response Status: $status_code"
+          echo "Response Body: $body"
+          
+          if [ "$status_code" -ge 200 ] && [ "$status_code" -lt 300 ]; then
             echo "Database contattato con successo!"
             exit 0
           else
